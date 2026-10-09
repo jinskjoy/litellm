@@ -5692,6 +5692,17 @@ export const resetEmailEventSettings = async (accessToken: string) => {
   }
 };
 
+export interface SpendReportEmailAlertItem {
+  id: string;
+  name: string;
+  enabled: boolean;
+  frequency: "daily" | "monthly";
+  send_time: string;
+  recipient_emails: string[];
+  group_by: ("team" | "team_key" | "team_model" | "team_key_model")[];
+  team_id?: string | null;
+}
+
 export interface SpendReportEmailSettingsValues {
   enabled: boolean;
   frequency: "daily" | "monthly" | "both";
@@ -5699,6 +5710,7 @@ export interface SpendReportEmailSettingsValues {
   monthly_send_time: string;
   recipient_emails: string[];
   group_by: ("team" | "team_key" | "team_model" | "team_key_model")[];
+  alerts?: SpendReportEmailAlertItem[];
 }
 
 export interface SpendReportEmailSettingsResponse {
@@ -5762,6 +5774,7 @@ export const sendSpendReportEmailTest = async (
     group_by?: string[];
     start_date?: string;
     end_date?: string;
+    team_id?: string | null;
   },
 ): Promise<any> => {
   try {

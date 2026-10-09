@@ -8,16 +8,21 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Plus, Trash2, Send } from "lucide-react";
 import { toast } from "@/lib/toast";
 import {
   getSpendReportEmailSettings,
   updateSpendReportEmailSettings,
   sendSpendReportEmailTest,
+  teamListCall,
+  type SpendReportEmailAlertItem,
   type SpendReportEmailSettingsValues,
 } from "./networking";
+import type { Team } from "@/components/key_team_helpers/key_list";
 
 interface SpendReportEmailSettingsProps {
   accessToken: string | null;
+  teams?: Team[];
 }
 
 type GroupByOptionId = "team" | "team_key" | "team_model" | "team_key_model";
@@ -35,23 +40,64 @@ const GROUP_BY_OPTIONS: readonly GroupByOption[] = [
   { id: "team_key_model", label: "Team + Key + Models", description: "Aggregates spend grouped by team, key, and model" },
 ];
 
-const DEFAULT_SETTINGS: SpendReportEmailSettingsValues = {
-  enabled: false,
-  frequency: "daily",
-  daily_send_time: "09:00",
-  monthly_send_time: "09:00",
-  recipient_emails: [],
-  group_by: ["team"],
+const buildInitialAlerts = (values: SpendReportEmailSettingsValues): SpendReportEmailAlertItem[] => {
+  if (values.alerts && values.alerts.length > 0) {
+    return values.alerts;
+  }
+
+  if (values.frequency === "both") {
+    return [
+      {
+        id: "daily-alert",
+        name: "Daily Spend Report",
+        enabled: values.enabled,
+        frequency: "daily",
+        send_time: values.daily_send_time || "09:00",
+        recipient_emails: values.recipient_emails || [],
+        group_by: values.group_by || ["team"],
+        team_id: null,
+      },
+      {
+        id: "monthly-alert",
+        name: "Monthly Spend Report",
+        enabled: values.enabled,
+        frequency: "monthly",
+        send_time: values.monthly_send_time || "09:00",
+        recipient_emails: values.recipient_emails || [],
+        group_by: values.group_by || ["team"],
+        team_id: null,
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "spend-alert-1",
+      name: "Spend Report Alert",
+      enabled: values.enabled ?? false,
+      frequency: values.frequency === "monthly" ? "monthly" : "daily",
+      send_time:
+        values.frequency === "monthly"
+          ? values.monthly_send_time || "09:00"
+          : values.daily_send_time || "09:00",
+      recipient_emails: values.recipient_emails || [],
+      group_by: values.group_by || ["team"],
+      team_id: null,
+    },
+  ];
 };
 
-export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> = ({ accessToken }) => {
+export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> = ({
+  accessToken,
+  teams: initialTeams,
+}) => {
   const [loading, setLoading] = useState<boolean>(Boolean(accessToken));
   const [saving, setSaving] = useState(false);
-  const [sendingTest, setSendingTest] = useState(false);
+  const [testingAlertId, setTestingAlertId] = useState<string | null>(null);
 
-  const [settings, setSettings] = useState<SpendReportEmailSettingsValues>(DEFAULT_SETTINGS);
-
-  const [recipientsInput, setRecipientsInput] = useState("");
+  const [alerts, setAlerts] = useState<SpendReportEmailAlertItem[]>([]);
+  const [recipientsInputs, setRecipientsInputs] = useState<Record<string, string>>({});
+  const [availableTeams, setAvailableTeams] = useState<Team[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -62,8 +108,13 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
     getSpendReportEmailSettings(accessToken)
       .then((response) => {
         if (active && response?.values) {
-          setSettings(response.values);
-          setRecipientsInput((response.values.recipient_emails || []).join(", "));
+          const loadedAlerts = buildInitialAlerts(response.values);
+          setAlerts(loadedAlerts);
+          const initialInputs: Record<string, string> = {};
+          loadedAlerts.forEach((a) => {
+            initialInputs[a.id] = (a.recipient_emails || []).join(", ");
+          });
+          setRecipientsInputs(initialInputs);
         }
       })
       .catch((error) => {
@@ -83,38 +134,123 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
     };
   }, [accessToken]);
 
-  const handleGroupByToggle = (optionId: GroupByOptionId, checked: boolean) => {
-    setSettings((prev) => {
-      let updated: GroupByOptionId[];
-      if (checked) {
-        updated = [...prev.group_by, optionId];
-      } else {
-        updated = prev.group_by.filter((g) => g !== optionId);
-      }
-      if (updated.length === 0) {
-        updated = ["team"];
-      }
-      return { ...prev, group_by: updated };
+  useEffect(() => {
+    if (initialTeams && initialTeams.length > 0) {
+      return;
+    }
+    if (!accessToken) {
+      return;
+    }
+
+    let active = true;
+    teamListCall(accessToken, null)
+      .then((response: unknown) => {
+        if (!active) return;
+        const resObj = response as { teams?: Team[]; data?: Team[] } | Team[] | null;
+        const list = Array.isArray(resObj)
+          ? resObj
+          : Array.isArray(resObj?.teams)
+            ? resObj.teams
+            : Array.isArray(resObj?.data)
+              ? resObj.data
+              : [];
+        setAvailableTeams(list);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, initialTeams]);
+
+  const teams = initialTeams && initialTeams.length > 0 ? initialTeams : availableTeams;
+
+  const handleAddAlert = () => {
+    const newId =
+      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `alert-${Date.now()}`;
+    const newAlert: SpendReportEmailAlertItem = {
+      id: newId,
+      name: `Spend Report Alert ${alerts.length + 1}`,
+      enabled: true,
+      frequency: "daily",
+      send_time: "09:00",
+      recipient_emails: [],
+      group_by: ["team"],
+      team_id: null,
+    };
+    setAlerts((prev) => [...prev, newAlert]);
+    setRecipientsInputs((prev) => ({ ...prev, [newId]: "" }));
+  };
+
+  const handleDeleteAlert = (alertId: string) => {
+    setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    setRecipientsInputs((prev) => {
+      const copy = { ...prev };
+      delete copy[alertId];
+      return copy;
     });
+  };
+
+  const handleUpdateAlert = (alertId: string, updates: Partial<SpendReportEmailAlertItem>) => {
+    setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, ...updates } : a)));
+  };
+
+  const handleRecipientsChange = (alertId: string, value: string) => {
+    setRecipientsInputs((prev) => ({ ...prev, [alertId]: value }));
+  };
+
+  const handleGroupByToggle = (alertId: string, optionId: GroupByOptionId, checked: boolean) => {
+    setAlerts((prev) =>
+      prev.map((a) => {
+        if (a.id !== alertId) return a;
+        let updated: GroupByOptionId[];
+        if (checked) {
+          updated = [...a.group_by, optionId];
+        } else {
+          updated = a.group_by.filter((g) => g !== optionId);
+        }
+        if (updated.length === 0) {
+          updated = ["team"];
+        }
+        return { ...a, group_by: updated };
+      }),
+    );
   };
 
   const handleSave = async () => {
     if (!accessToken) return;
 
-    const parsedRecipients = recipientsInput
-      .split(",")
-      .map((e) => e.trim())
-      .filter((e) => e.length > 0);
-
-    const payload: SpendReportEmailSettingsValues = {
-      ...settings,
-      recipient_emails: parsedRecipients,
-    };
-
     setSaving(true);
     try {
+      const parsedAlerts: SpendReportEmailAlertItem[] = alerts.map((a) => {
+        const raw = recipientsInputs[a.id] ?? (a.recipient_emails || []).join(", ");
+        const parsed = raw
+          .split(",")
+          .map((e) => e.trim())
+          .filter((e) => e.length > 0);
+        return {
+          ...a,
+          recipient_emails: parsed,
+        };
+      });
+
+      const anyEnabled = parsedAlerts.some((a) => a.enabled);
+      const dailyAlert = parsedAlerts.find((a) => a.frequency === "daily");
+      const monthlyAlert = parsedAlerts.find((a) => a.frequency === "monthly");
+      const allRecipients = Array.from(new Set(parsedAlerts.flatMap((a) => a.recipient_emails)));
+
+      const payload: SpendReportEmailSettingsValues = {
+        enabled: anyEnabled,
+        frequency: dailyAlert && monthlyAlert ? "both" : monthlyAlert ? "monthly" : "daily",
+        daily_send_time: dailyAlert?.send_time || "09:00",
+        monthly_send_time: monthlyAlert?.send_time || "09:00",
+        recipient_emails: allRecipients,
+        group_by: parsedAlerts[0]?.group_by || ["team"],
+        alerts: parsedAlerts,
+      };
+
       await updateSpendReportEmailSettings(accessToken, payload);
-      setSettings(payload);
+      setAlerts(parsedAlerts);
       toast.success("Spend report email settings saved successfully");
     } catch (error) {
       console.error("Failed to save spend report email settings:", error);
@@ -124,10 +260,11 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
     }
   };
 
-  const handleSendTestReport = async () => {
+  const handleSendTestReport = async (alert: SpendReportEmailAlertItem) => {
     if (!accessToken) return;
 
-    const parsedRecipients = recipientsInput
+    const raw = recipientsInputs[alert.id] ?? (alert.recipient_emails || []).join(", ");
+    const parsedRecipients = raw
       .split(",")
       .map((e) => e.trim())
       .filter((e) => e.length > 0);
@@ -137,12 +274,13 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
       return;
     }
 
-    setSendingTest(true);
+    setTestingAlertId(alert.id);
     try {
       const result = await sendSpendReportEmailTest(accessToken, {
-        frequency: settings.frequency === "monthly" ? "monthly" : "daily",
+        frequency: alert.frequency,
         recipient_emails: parsedRecipients,
-        group_by: settings.group_by,
+        group_by: alert.group_by,
+        team_id: alert.team_id ?? null,
       });
       toast.success(
         `Test spend report email sent! Total spend: $${result.total_spend ?? 0} across ${result.total_requests ?? 0} request(s).`,
@@ -151,19 +289,21 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
       console.error("Failed to send test spend report email:", error);
       toast.fromError(error);
     } finally {
-      setSendingTest(false);
+      setTestingAlertId(null);
     }
   };
+
+  const activeAlertsCount = alerts.filter((a) => a.enabled).length;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold">Scheduled Spend Reports (Email / SMTP)</CardTitle>
-              <Badge variant={settings.enabled ? "default" : "outline"}>
-                {settings.enabled ? "Active" : "Disabled"}
+              <Badge variant={activeAlertsCount > 0 ? "default" : "outline"}>
+                {activeAlertsCount > 0 ? `${activeAlertsCount} Active` : "Disabled"}
               </Badge>
             </div>
             <CardDescription className="text-sm text-muted-foreground">
@@ -171,14 +311,17 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
               breakdowns by team, API keys, and models.
             </CardDescription>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium">{settings.enabled ? "Enabled" : "Disabled"}</span>
-            <Switch
-              checked={settings.enabled}
-              onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enabled: checked }))}
-              disabled={loading || saving}
-            />
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAddAlert}
+            disabled={loading || saving}
+            className="self-start sm:self-auto flex items-center gap-1.5"
+          >
+            <Plus className="h-4 w-4" />
+            Add Alert
+          </Button>
         </div>
       </CardHeader>
 
@@ -188,124 +331,218 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
         {loading ? (
           <div className="space-y-4">
             <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-28 w-full" />
+            <Skeleton className="h-28 w-full" />
+          </div>
+        ) : alerts.length === 0 ? (
+          <div className="text-center py-12 border border-dashed rounded-lg space-y-3">
+            <p className="text-sm font-medium text-foreground">No scheduled spend report alerts configured</p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Configure daily or monthly alerts for your entire proxy or specific teams to keep stakeholders informed of
+              LLM spend.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddAlert}
+              className="mt-2 flex items-center gap-1.5 mx-auto"
+            >
+              <Plus className="h-4 w-4" />
+              Add First Alert
+            </Button>
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Report Frequency</label>
-                <Select
-                  value={settings.frequency}
-                  onValueChange={(val: "daily" | "monthly" | "both" | null) => {
-                    if (val) {
-                      setSettings((prev) => ({ ...prev, frequency: val }));
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select frequency" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily Report (covers previous day)</SelectItem>
-                    <SelectItem value="monthly">Monthly Report (1st of month for previous month)</SelectItem>
-                    <SelectItem value="both">Both Daily and Monthly Reports</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Choose whether to send spend reports daily, on the 1st of each month, or both.
-                </p>
-              </div>
+            <div className="space-y-4">
+              {alerts.map((alert, index) => {
+                const recipientsValue = recipientsInputs[alert.id] ?? (alert.recipient_emails || []).join(", ");
+                const isTesting = testingAlertId === alert.id;
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Recipient Email Addresses</label>
-                <Input
-                  placeholder="e.g. finops@example.com, manager@example.com"
-                  value={recipientsInput}
-                  onChange={(e) => setRecipientsInput(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Comma-separated email addresses that will receive the spend reports.
-                </p>
-              </div>
+                return (
+                  <Card key={alert.id} className="border border-border bg-card shadow-sm">
+                    <CardHeader className="pb-3 pt-4 px-4 sm:px-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <Input
+                            value={alert.name}
+                            onChange={(e) => handleUpdateAlert(alert.id, { name: e.target.value })}
+                            placeholder={`Alert ${index + 1}`}
+                            className="font-semibold text-sm max-w-xs h-8"
+                          />
+                          <Badge variant="secondary" className="capitalize text-xs shrink-0">
+                            {alert.frequency}
+                          </Badge>
+                          {alert.team_id ? (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              Team: {teams.find((t) => t.team_id === alert.team_id)?.team_alias || alert.team_id}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs shrink-0">
+                              All Teams
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-muted-foreground">{alert.enabled ? "Active" : "Disabled"}</span>
+                            <Switch
+                              checked={alert.enabled}
+                              onCheckedChange={(checked) => handleUpdateAlert(alert.id, { enabled: checked })}
+                              disabled={saving}
+                            />
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDeleteAlert(alert.id)}
+                            disabled={saving}
+                            title="Delete alert"
+                            aria-label={`Delete alert ${alert.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="px-4 sm:px-6 pb-4 pt-0 space-y-4">
+                      <Separator className="mb-4" />
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground">Frequency</label>
+                          <Select
+                            value={alert.frequency}
+                            onValueChange={(val: "daily" | "monthly" | null) => {
+                              if (val) handleUpdateAlert(alert.id, { frequency: val });
+                            }}
+                          >
+                            <SelectTrigger className="w-full h-9 text-xs">
+                              <SelectValue placeholder="Select frequency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="daily">Daily (Previous Day)</SelectItem>
+                              <SelectItem value="monthly">Monthly (1st of Month)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground">Send Time (UTC)</label>
+                          <Input
+                            placeholder="09:00"
+                            value={alert.send_time}
+                            onChange={(e) => handleUpdateAlert(alert.id, { send_time: e.target.value })}
+                            className="h-9 text-xs"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground">Team Scope</label>
+                          <Select
+                            value={alert.team_id || "all"}
+                            onValueChange={(val: string | null) => {
+                              handleUpdateAlert(alert.id, { team_id: !val || val === "all" ? null : val });
+                            }}
+                          >
+                            <SelectTrigger className="w-full h-9 text-xs">
+                              <SelectValue placeholder="Select team" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Teams (No filter)</SelectItem>
+                              {teams.map((t) => (
+                                <SelectItem key={t.team_id} value={t.team_id}>
+                                  {t.team_alias || t.team_id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground">Recipient Email Addresses</label>
+                        <Input
+                          placeholder="finops@example.com, manager@example.com"
+                          value={recipientsValue}
+                          onChange={(e) => handleRecipientsChange(alert.id, e.target.value)}
+                          className="h-9 text-xs"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Comma-separated list of target emails to receive this alert.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-foreground">Cumulative Report Groupings</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                          {GROUP_BY_OPTIONS.map((opt) => {
+                            const isChecked = alert.group_by.includes(opt.id);
+                            const elementId = `groupby-${alert.id}-${opt.id}`;
+                            return (
+                              <div
+                                key={opt.id}
+                                className="flex items-start space-x-2 p-2 rounded-md border border-border bg-muted/30"
+                              >
+                                <Checkbox
+                                  id={elementId}
+                                  checked={isChecked}
+                                  onCheckedChange={(checked) =>
+                                    handleGroupByToggle(alert.id, opt.id, Boolean(checked))
+                                  }
+                                  className="mt-0.5"
+                                />
+                                <label htmlFor={elementId} className="cursor-pointer space-y-0.5 select-none">
+                                  <div className="text-xs font-medium text-foreground">{opt.label}</div>
+                                  <div className="text-[10px] text-muted-foreground leading-tight">
+                                    {opt.description}
+                                  </div>
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSendTestReport(alert)}
+                          disabled={isTesting || saving}
+                          className="flex items-center gap-1.5 text-xs h-8"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          {isTesting ? "Sending Test..." : "Send Test Report Now"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {(settings.frequency === "daily" || settings.frequency === "both") && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Daily Send Time (UTC)</label>
-                  <Input
-                    placeholder="09:00"
-                    value={settings.daily_send_time}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, daily_send_time: e.target.value }))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Time in 24-hour UTC format (HH:MM) when the daily report will be delivered.
-                  </p>
-                </div>
-              )}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddAlert}
+                disabled={loading || saving}
+                className="flex items-center gap-1.5"
+              >
+                <Plus className="h-4 w-4" />
+                Add Another Alert
+              </Button>
 
-              {(settings.frequency === "monthly" || settings.frequency === "both") && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Monthly Send Time (UTC)</label>
-                  <Input
-                    placeholder="09:00"
-                    value={settings.monthly_send_time}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, monthly_send_time: e.target.value }))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Time in 24-hour UTC format (HH:MM) on the 1st of every month to send previous month&apos;s report.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium text-foreground">Cumulative Report Groupings</label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Select which breakdown tables to include in the email report. Total cost is rounded to 2 decimal places
-                  and only rows with spend greater than 0 are included.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                {GROUP_BY_OPTIONS.map((opt) => {
-                  const isChecked = settings.group_by.includes(opt.id);
-                  return (
-                    <div
-                      key={opt.id}
-                      className="flex items-start space-x-3 p-3 rounded-md border border-border bg-muted/40 hover:bg-muted/60 transition-colors"
-                    >
-                      <Checkbox
-                        id={`groupby-${opt.id}`}
-                        checked={isChecked}
-                        onCheckedChange={(checked) =>
-                          handleGroupByToggle(opt.id, Boolean(checked))
-                        }
-                        className="mt-0.5"
-                      />
-                      <label htmlFor={`groupby-${opt.id}`} className="cursor-pointer space-y-0.5 select-none">
-                        <div className="text-sm font-medium text-foreground">{opt.label}</div>
-                        <div className="text-xs text-muted-foreground">{opt.description}</div>
-                      </label>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-border">
               <Button onClick={handleSave} disabled={saving || loading}>
                 {saving ? "Saving..." : "Save Spend Report Settings"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleSendTestReport}
-                disabled={sendingTest || saving || loading}
-              >
-                {sendingTest ? "Sending Test Report..." : "Send Test Report Now"}
               </Button>
             </div>
           </div>

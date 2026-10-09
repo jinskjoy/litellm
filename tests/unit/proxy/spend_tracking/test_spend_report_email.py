@@ -10,6 +10,7 @@ from litellm.constants import (
     MONTHLY_EMAIL_SPEND_REPORT_JOB_ID,
 )
 from litellm.proxy.spend_tracking.spend_report_email import (
+    SpendReportEmailAlert,
     SpendReportEmailSettings,
     build_spend_report_email_html,
     fetch_grouped_spend_data,
@@ -385,4 +386,94 @@ def test_trigger_spend_report_email_endpoint(monkeypatch: pytest.MonkeyPatch) ->
         assert data["recipients"] == ["test@example.com"]
     finally:
         app.dependency_overrides.pop(user_api_key_auth, None)
+
+
+@pytest.mark.asyncio
+async def test_fetch_grouped_spend_data_with_team_id() -> None:
+    captured_queries: Final[list[tuple[str, tuple[object, ...]]]] = []
+
+    class MockPrismaDb:
+        async def query_raw(self, query: str, *args: object) -> list[dict[str, object]]:
+            captured_queries.append((query, args))
+            return [{"team": "engineering", "total_spend": 25.5, "request_count": 10}]
+
+    mock_prisma = MockPrismaDb()
+    rows = await fetch_grouped_spend_data(
+        mock_prisma, "team", "2026-10-01", "2026-10-08", team_id="engineering"
+    )
+    assert len(rows) == 1
+    assert rows[0]["team"] == "engineering"
+    assert rows[0]["total_spend"] == 25.5
+    assert len(captured_queries) == 1
+    query_str, params = captured_queries[0]
+    assert "/* TEAM_FILTER */" not in query_str
+    assert "AND (s.team_id = $3 OR t.team_alias = $3 OR t.team_id = $3)" in query_str
+    assert params == ("2026-10-01", "2026-10-08", "engineering")
+
+
+def test_setup_email_spend_report_jobs_multiple_alerts() -> None:
+    mock_scheduler: Final = MagicMock()
+    added_jobs: Final[dict[str, dict[str, object]]] = {}
+
+    def fake_add_job(func: object, trigger: str, **kwargs: object) -> None:
+        job_id = str(kwargs.get("id"))
+        added_jobs[job_id] = {"trigger": trigger, **kwargs}
+
+    mock_scheduler.add_job.side_effect = fake_add_job
+    mock_scheduler.remove_job = MagicMock()
+    mock_scheduler.get_jobs.return_value = []
+
+    alert1 = SpendReportEmailAlert(
+        id="alert-daily-finance",
+        name="Daily Finance",
+        enabled=True,
+        frequency="daily",
+        send_time="08:15",
+        recipient_emails=["finance@example.com"],
+        group_by=["team"],
+    )
+    alert2 = SpendReportEmailAlert(
+        id="alert-monthly-exec",
+        name="Monthly Exec",
+        enabled=True,
+        frequency="monthly",
+        send_time="10:00",
+        recipient_emails=["exec@example.com"],
+        group_by=["team_key"],
+    )
+    alert3 = SpendReportEmailAlert(
+        id="alert-daily-eng",
+        name="Daily Engineering",
+        enabled=True,
+        frequency="daily",
+        send_time="09:00",
+        recipient_emails=["eng@example.com"],
+        team_id="eng_team",
+    )
+    alert_disabled = SpendReportEmailAlert(
+        id="alert-disabled",
+        name="Disabled Alert",
+        enabled=False,
+        frequency="daily",
+        recipient_emails=["none@example.com"],
+    )
+
+    settings = SpendReportEmailSettings(
+        enabled=True,
+        alerts=[alert1, alert2, alert3, alert_disabled],
+    )
+    setup_email_spend_report_jobs(mock_scheduler, settings=settings)
+
+    assert "email_spend_report_alert-daily-finance" in added_jobs
+    assert added_jobs["email_spend_report_alert-daily-finance"]["hour"] == 8
+    assert added_jobs["email_spend_report_alert-daily-finance"]["minute"] == 15
+
+    assert "email_spend_report_alert-monthly-exec" in added_jobs
+    assert added_jobs["email_spend_report_alert-monthly-exec"]["day"] == 1
+    assert added_jobs["email_spend_report_alert-monthly-exec"]["hour"] == 10
+    assert added_jobs["email_spend_report_alert-monthly-exec"]["minute"] == 0
+
+    assert "email_spend_report_alert-daily-eng" in added_jobs
+    assert "email_spend_report_alert-disabled" not in added_jobs
+
 

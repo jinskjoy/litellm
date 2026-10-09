@@ -6,7 +6,7 @@
  * Works at 1m+ spend logs, by querying an aggregate table instead.
  */
 
-import { ChevronDown, ChevronRight, Download, Info, Sparkles, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Info, Mail, Sparkles, X } from "lucide-react";
 import type { DateRangePickerValue } from "@/components/shared/date_picker_types";
 import React, { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -30,6 +30,7 @@ import { ActivityMetrics, processActivityData } from "@/components/activity_metr
 import CloudZeroExportModal from "@/components/cloudzero_export_modal";
 import UserDropdown from "@/components/common_components/UserDropdown";
 import EntityUsageExportModal from "@/components/EntityUsageExport";
+import EmailSpendSummaryModal from "@/components/EmailSpendSummaryModal";
 import KeyActivityPanel from "@/components/UsagePage/components/KeyActivityPanel";
 import { Team } from "@/components/key_team_helpers/key_list";
 import { gatewayDailyActivityCall, Organization, tagListCall } from "@/components/networking";
@@ -110,6 +111,7 @@ const UsagePage: React.FC<UsagePageProps> = ({ teams, organizations }) => {
   const [modelViewType, setModelViewType] = useState<ModelViewType>("groups");
   const [isCloudZeroModalOpen, setIsCloudZeroModalOpen] = useState(false);
   const [isGlobalExportModalOpen, setIsGlobalExportModalOpen] = useState(false);
+  const [isEmailSummaryModalOpen, setIsEmailSummaryModalOpen] = useState(false);
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [selectedUsageView, setUsageView] = useState<UsageOption>("global");
   // Org-admin membership is read from the server, so unlike the other usage
@@ -504,6 +506,10 @@ const UsagePage: React.FC<UsagePageProps> = ({ teams, organizations }) => {
                     <Button variant="outline" onClick={() => setIsGlobalExportModalOpen(true)}>
                       <Download />
                       Export Data
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsEmailSummaryModalOpen(true)}>
+                      <Mail />
+                      Email Summary
                     </Button>
                   </div>
                 </div>
@@ -1033,6 +1039,16 @@ const UsagePage: React.FC<UsagePageProps> = ({ teams, organizations }) => {
         dateRange={dateValue}
         selectedFilters={[]}
         customTitle="Export Usage Data"
+      />
+
+      {/* Email Spend Summary Modal */}
+      <EmailSpendSummaryModal
+        isOpen={isEmailSummaryModalOpen}
+        onClose={() => setIsEmailSummaryModalOpen(false)}
+        accessToken={accessToken}
+        startDate={startTime ? startTime.toISOString().split("T")[0] : undefined}
+        endDate={endTime ? endTime.toISOString().split("T")[0] : undefined}
+        teams={teams}
       />
 
       {/* AI Chat Panel */}

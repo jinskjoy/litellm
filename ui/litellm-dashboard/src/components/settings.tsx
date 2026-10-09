@@ -18,10 +18,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUrlTab } from "@/hooks/useUrlTab";
 import EmailSettings from "./email_settings";
 import MSTeamsSettings from "./MSTeamsSettings";
 import { Logo } from "@/components/molecules/logo/Logo";
 import { toast } from "@/lib/toast";
+
+const SETTINGS_TABS = [
+  "logging-callbacks",
+  "cloudzero-cost-tracking",
+  "alerting-types",
+  "alerting-settings",
+  "email-alerts",
+  "ms-teams-alerts",
+] as const;
+
+type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 import AlertingSettings from "./alerting/alerting_settings";
 import CloudZeroCostTracking from "./CloudZeroCostTracking/CloudZeroCostTracking";
@@ -293,6 +305,7 @@ const buildCallbackPayload = (formValues: Record<string, any>, callbackName: str
 };
 
 const Settings: React.FC<SettingsPageProps> = ({ accessToken, userRole, userID, premiumUser }) => {
+  const [selectedTab, setSelectedTab] = useUrlTab(SETTINGS_TABS, "logging-callbacks");
   const [callbacks, setCallbacks] = useState<AlertingObject[]>([]);
   const [isLoadingCallbacks, setIsLoadingCallbacks] = useState(true);
   const [alerts, setAlerts] = useState<any[]>([]);
@@ -570,7 +583,7 @@ const Settings: React.FC<SettingsPageProps> = ({ accessToken, userRole, userID, 
   return (
     <div className="mx-4">
       <div className="grid grid-cols-1 gap-2 p-8 w-full mt-2">
-        <Tabs defaultValue="logging-callbacks">
+        <Tabs value={selectedTab} onValueChange={(val) => setSelectedTab(val as SettingsTab)}>
           <TabsList variant="line">
             <TabsTrigger value="logging-callbacks">Logging Callbacks</TabsTrigger>
             <TabsTrigger value="cloudzero-cost-tracking">CloudZero Cost Tracking</TabsTrigger>

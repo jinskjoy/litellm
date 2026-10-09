@@ -5057,5 +5057,6 @@ async def trigger_spend_report_email(
         group_by=request.group_by,
         start_date=request.start_date,
         end_date=request.end_date,
+        team_id=request.team_id,
     )
 

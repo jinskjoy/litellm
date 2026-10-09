@@ -3296,6 +3296,7 @@ class TestSpendReportEmailSettingsEndpoints:
             "monthly_send_time": "09:30",
             "recipient_emails": ["admin@example.com"],
             "group_by": ["team", "team_key_model"],
+            "alerts": [],
         }
         try:
             resp = client.patch("/update/spend_report_email_settings", json=payload)
