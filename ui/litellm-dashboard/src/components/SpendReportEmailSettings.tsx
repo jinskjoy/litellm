@@ -40,6 +40,11 @@ const GROUP_BY_OPTIONS: readonly GroupByOption[] = [
   { id: "team_key_model", label: "Team + Key + Models", description: "Aggregates spend grouped by team, key, and model" },
 ];
 
+const FREQUENCY_LABELS: Record<"daily" | "monthly", string> = {
+  daily: "Daily (Previous Day)",
+  monthly: "Monthly (1st of Month)",
+};
+
 const buildInitialAlerts = (values: SpendReportEmailSettingsValues): SpendReportEmailAlertItem[] => {
   if (values.alerts && values.alerts.length > 0) {
     return values.alerts;
@@ -358,6 +363,9 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
               {alerts.map((alert, index) => {
                 const recipientsValue = recipientsInputs[alert.id] ?? (alert.recipient_emails || []).join(", ");
                 const isTesting = testingAlertId === alert.id;
+                const selectedTeamLabel = alert.team_id
+                  ? teams.find((t) => t.team_id === alert.team_id)?.team_alias || alert.team_id
+                  : "All Teams (No filter)";
 
                 return (
                   <Card key={alert.id} className="border border-border bg-card shadow-sm">
@@ -423,7 +431,9 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
                             }}
                           >
                             <SelectTrigger className="w-full h-9 text-xs">
-                              <SelectValue placeholder="Select frequency" />
+                              <SelectValue placeholder="Select frequency">
+                                {FREQUENCY_LABELS[alert.frequency]}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="daily">Daily (Previous Day)</SelectItem>
@@ -451,7 +461,9 @@ export const SpendReportEmailSettings: React.FC<SpendReportEmailSettingsProps> =
                             }}
                           >
                             <SelectTrigger className="w-full h-9 text-xs">
-                              <SelectValue placeholder="Select team" />
+                              <SelectValue placeholder="Select team">
+                                {selectedTeamLabel}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">All Teams (No filter)</SelectItem>

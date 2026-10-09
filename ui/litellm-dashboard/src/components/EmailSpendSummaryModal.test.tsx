@@ -68,6 +68,8 @@ describe("EmailSpendSummaryModal", () => {
       />,
     );
 
+    expect(screen.getByText("Engineering")).toBeInTheDocument();
+
     const input = screen.getByPlaceholderText(/finance@example.com/i);
     fireEvent.change(input, { target: { value: "alice@example.com, bob@example.com" } });
 

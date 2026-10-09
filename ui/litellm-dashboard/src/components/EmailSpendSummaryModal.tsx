@@ -169,7 +169,11 @@ export const EmailSpendSummaryModal: React.FC<EmailSpendSummaryModalProps> = ({
               <label className="text-sm font-medium text-foreground">Team Scope</label>
               <Select value={selectedTeamId} onValueChange={(val) => setSelectedTeamId(val || "all")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All Teams" />
+                  <SelectValue placeholder="All Teams">
+                    {selectedTeamId !== "all"
+                      ? teams.find((t) => t.team_id === selectedTeamId)?.team_alias || selectedTeamId
+                      : "All Teams"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Teams</SelectItem>

@@ -111,6 +111,9 @@ describe("SpendReportEmailSettings", () => {
       expect(screen.getByDisplayValue("exec@example.com")).toBeInTheDocument();
       expect(screen.getByDisplayValue("alpha-lead@example.com")).toBeInTheDocument();
       expect(screen.getByText("Team: Team Alpha")).toBeInTheDocument();
+      expect(screen.getByText("Daily (Previous Day)")).toBeInTheDocument();
+      expect(screen.getByText("Monthly (1st of Month)")).toBeInTheDocument();
+      expect(screen.getByText("Team Alpha")).toBeInTheDocument();
     });
   });
 
