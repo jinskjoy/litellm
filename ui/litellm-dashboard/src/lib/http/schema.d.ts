@@ -5757,6 +5757,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/get/spend_report_email_settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Spend Report Email Settings
+         * @description Get email spend report settings from litellm_settings.
+         */
+        get: operations["get_spend_report_email_settings_get_spend_report_email_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/get/sso_settings": {
         parameters: {
             query?: never;
@@ -15913,6 +15933,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/spend/report/email/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Spend Report Email
+         * @description Trigger sending a spend report email immediately.
+         */
+        post: operations["trigger_spend_report_email_spend_report_email_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/spend/tags": {
         parameters: {
             query?: never;
@@ -18261,6 +18301,26 @@ export interface paths {
          *     Settings will be picked up by all pods within approximately 10 seconds via background polling.
          */
         patch: operations["update_mcp_tool_search_settings_update_mcp_tool_search_settings_patch"];
+        trace?: never;
+    };
+    "/update/spend_report_email_settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Spend Report Email Settings
+         * @description Update email spend report settings in litellm_settings and reschedule jobs.
+         */
+        patch: operations["update_spend_report_email_settings_update_spend_report_email_settings_patch"];
         trace?: never;
     };
     "/update/sso_settings": {
@@ -46043,6 +46103,107 @@ export interface components {
              */
             total_tokens: number;
         };
+        /** SpendReportEmailSendRequest */
+        SpendReportEmailSendRequest: {
+            /**
+             * End Date
+             * @description Optional YYYY-MM-DD end date override
+             */
+            end_date?: string | null;
+            /**
+             * Frequency
+             * @description Report frequency to generate: 'daily' or 'monthly'
+             * @default daily
+             * @enum {string}
+             */
+            frequency: "daily" | "monthly";
+            /**
+             * Group By
+             * @description Optional list of groupings to include in the report
+             */
+            group_by?: ("team" | "team_key" | "team_model" | "team_key_model")[] | null;
+            /**
+             * Recipient Emails
+             * @description Optional list of recipients. Defaults to configured recipient_emails
+             */
+            recipient_emails?: string[] | null;
+            /**
+             * Start Date
+             * @description Optional YYYY-MM-DD start date override
+             */
+            start_date?: string | null;
+        };
+        /** SpendReportEmailSettings */
+        SpendReportEmailSettings: {
+            /**
+             * Daily Send Time
+             * @description Daily spend report send time in HH:MM (24-hour UTC format)
+             * @default 09:00
+             */
+            daily_send_time: string;
+            /**
+             * Enabled
+             * @description Whether email spend reports are enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Frequency
+             * @description Report frequency: 'daily', 'monthly', or 'both'
+             * @default daily
+             * @enum {string}
+             */
+            frequency: "daily" | "monthly" | "both";
+            /**
+             * Group By
+             * @description Groupings to include in cumulative reports: 'team', 'team_key', 'team_model', 'team_key_model'
+             */
+            group_by?: ("team" | "team_key" | "team_model" | "team_key_model")[];
+            /**
+             * Monthly Send Time
+             * @description Monthly spend report send time in HH:MM (24-hour UTC format), sent on the 1st of each month
+             * @default 09:00
+             */
+            monthly_send_time: string;
+            /**
+             * Recipient Emails
+             * @description List of email addresses to receive the spend report
+             */
+            recipient_emails?: string[];
+        };
+        /**
+         * SpendReportEmailSettingsResponse
+         * @description Response model for spend report email settings
+         */
+        SpendReportEmailSettingsResponse: {
+            /** Field Schema */
+            field_schema: {
+                [key: string]: unknown;
+            };
+            /** Values */
+            values: {
+                [key: string]: unknown;
+            };
+        };
+        /** SpendReportSendResult */
+        SpendReportSendResult: {
+            /** End Date */
+            end_date: string;
+            /** Frequency */
+            frequency: string;
+            /** Message */
+            message: string;
+            /** Recipients */
+            recipients: string[];
+            /** Start Date */
+            start_date: string;
+            /** Status */
+            status: string;
+            /** Total Requests */
+            total_requests: number;
+            /** Total Spend */
+            total_spend: number;
+        };
         /** StandardLoggingHeuristicV2Forecast */
         StandardLoggingHeuristicV2Forecast: {
             /** Predicted Tier */
@@ -59755,6 +59916,26 @@ export interface operations {
             };
         };
     };
+    get_spend_report_email_settings_get_spend_report_email_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendReportEmailSettingsResponse"];
+                };
+            };
+        };
+    };
     get_sso_settings_get_sso_settings_get: {
         parameters: {
             query?: never;
@@ -72277,6 +72458,39 @@ export interface operations {
             };
         };
     };
+    trigger_spend_report_email_spend_report_email_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendReportEmailSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendReportSendResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     view_spend_tags_spend_tags_get: {
         parameters: {
             query?: {
@@ -75285,6 +75499,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_spend_report_email_settings_update_spend_report_email_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendReportEmailSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

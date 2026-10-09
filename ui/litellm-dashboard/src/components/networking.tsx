@@ -5692,6 +5692,100 @@ export const resetEmailEventSettings = async (accessToken: string) => {
   }
 };
 
+export interface SpendReportEmailSettingsValues {
+  enabled: boolean;
+  frequency: "daily" | "monthly" | "both";
+  daily_send_time: string;
+  monthly_send_time: string;
+  recipient_emails: string[];
+  group_by: ("team" | "team_key" | "team_model" | "team_key_model")[];
+}
+
+export interface SpendReportEmailSettingsResponse {
+  values: SpendReportEmailSettingsValues;
+  field_schema: Record<string, any>;
+}
+
+export const getSpendReportEmailSettings = async (accessToken: string): Promise<SpendReportEmailSettingsResponse> => {
+  try {
+    const url = proxyBaseUrl ? `${proxyBaseUrl}/get/spend_report_email_settings` : `/get/spend_report_email_settings`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        [globalLitellmHeaderName]: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!response.ok) {
+      const errorData = await response.text();
+      handleError(errorData);
+      throw new Error("Failed to get spend report email settings");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to get spend report email settings:", error);
+    throw error;
+  }
+};
+
+export const updateSpendReportEmailSettings = async (
+  accessToken: string,
+  settings: SpendReportEmailSettingsValues,
+): Promise<any> => {
+  try {
+    const url = proxyBaseUrl ? `${proxyBaseUrl}/update/spend_report_email_settings` : `/update/spend_report_email_settings`;
+    const response = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        [globalLitellmHeaderName]: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(settings),
+    });
+    if (!response.ok) {
+      const errorData = await response.text();
+      handleError(errorData);
+      throw new Error("Failed to update spend report email settings");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to update spend report email settings:", error);
+    throw error;
+  }
+};
+
+export const sendSpendReportEmailTest = async (
+  accessToken: string,
+  payload: {
+    frequency?: "daily" | "monthly";
+    recipient_emails?: string[];
+    group_by?: string[];
+    start_date?: string;
+    end_date?: string;
+  },
+): Promise<any> => {
+  try {
+    const url = proxyBaseUrl ? `${proxyBaseUrl}/spend/report/email/send` : `/spend/report/email/send`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        [globalLitellmHeaderName]: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.text();
+      handleError(errorData);
+      throw new Error("Failed to trigger spend report email");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to trigger spend report email:", error);
+    throw error;
+  }
+};
+
 export { type Team } from "./key_team_helpers/key_list"; // Re-export Team
 
 export const deleteAgentCall = async (accessToken: string, agentId: string) => {

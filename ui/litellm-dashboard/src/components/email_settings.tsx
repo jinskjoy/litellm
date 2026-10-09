@@ -6,6 +6,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { serviceHealthCheck, setCallbacksCall } from "./networking";
 import { EmailEventSettings } from "./email_events";
+import SpendReportEmailSettings from "./SpendReportEmailSettings";
 
 interface EmailSettingsProps {
   accessToken: string | null;
@@ -86,6 +87,9 @@ const EmailSettings: React.FC<EmailSettingsProps> = ({ accessToken, premiumUser,
 
   return (
     <>
+      <div className="mt-6 mb-6">
+        <SpendReportEmailSettings accessToken={accessToken} />
+      </div>
       <div className="mt-6 mb-6">
         <EmailEventSettings accessToken={accessToken} />
       </div>
