@@ -42,6 +42,7 @@ from litellm.proxy.spend_tracking.ptu_feature_flag import (
     PTU_COST_ATTRIBUTION_ENV_VAR,
     is_ptu_cost_attribution_enabled,
 )
+from litellm.proxy.spend_tracking.spend_report_email import SpendReportEmailSettings
 from litellm.proxy.utils import CONFIG_PARAMS_TARGET, invalidate_config_param
 from litellm.repositories.config_repository import ConfigRepository
 from litellm.repositories.organization_repository import OrganizationRepository
@@ -228,6 +229,10 @@ class DefaultTeamSettingsResponse(SettingsResponse):
 
 class UIThemeSettingsResponse(SettingsResponse):
     """Response model for UI theme settings"""
+
+
+class SpendReportEmailSettingsResponse(SettingsResponse):
+    """Response model for spend report email settings"""
 
 
 _TEAM_ADMIN_FIELD_ENUM: Final = tuple(sorted(SUPPORTED_TEAM_ADMIN_PERMISSIONS))
@@ -1006,6 +1011,7 @@ async def _update_litellm_setting(
         | MCPSemanticFilterSettings
         | MCPToolSearchSettings
         | WebSearchInterceptionSettings
+        | SpendReportEmailSettings
     ),
     settings_key: str,
     success_message: str,
@@ -1663,6 +1669,61 @@ async def update_mcp_tool_search_settings(
         success_message="MCP tool search settings updated successfully. Changes will be applied across all pods within 10 seconds.",
         user_api_key_dict=user_api_key_dict,
     )
+
+
+@router.get(
+    "/get/spend_report_email_settings",
+    tags=["Spend Management"],
+    dependencies=[Depends(user_api_key_auth)],
+    response_model=SpendReportEmailSettingsResponse,
+)
+async def get_spend_report_email_settings():
+    """
+    Get email spend report settings from litellm_settings.
+    """
+    from litellm.proxy.proxy_server import proxy_config
+
+    config: Final = await proxy_config.get_config()
+
+    return await _get_settings_with_schema(
+        settings_key="spend_report_email_settings",
+        settings_class=SpendReportEmailSettings,
+        config=config,
+    )
+
+
+@router.patch(
+    "/update/spend_report_email_settings",
+    tags=["Spend Management"],
+    dependencies=[Depends(user_api_key_auth)],
+)
+async def update_spend_report_email_settings(
+    settings: SpendReportEmailSettings,
+    user_api_key_dict: UserAPIKeyAuth = Depends(user_api_key_auth),
+):
+    """
+    Update email spend report settings in litellm_settings and reschedule jobs.
+    """
+    if user_api_key_dict.user_role != LitellmUserRoles.PROXY_ADMIN:
+        raise HTTPException(
+            status_code=403,
+            detail="Only proxy admins can update spend report email settings.",
+        )
+
+    from litellm.proxy.proxy_server import scheduler
+    from litellm.proxy.spend_tracking.spend_report_email import setup_email_spend_report_jobs
+
+    result: Final = await _update_litellm_setting(
+        settings=settings,
+        settings_key="spend_report_email_settings",
+        success_message="Spend report email settings updated successfully",
+        user_api_key_dict=user_api_key_dict,
+    )
+
+    if scheduler is not None:
+        setup_email_spend_report_jobs(scheduler=scheduler, settings=settings)
+
+    return result
 
 
 UI_SETTINGS_CACHE_KEY: Final = "ui_settings:settings_dict"

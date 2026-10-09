@@ -3241,6 +3241,76 @@ class TestMcpToolSearchSettingsEndpoints:
         assert mock_proxy_config["save_call_count"]() == 0
 
 
+class TestSpendReportEmailSettingsEndpoints:
+    @staticmethod
+    def _override_auth(role: LitellmUserRoles):
+        from litellm.proxy._types import UserAPIKeyAuth
+        from litellm.proxy.auth.user_api_key_auth import user_api_key_auth
+
+        app.dependency_overrides[user_api_key_auth] = lambda: UserAPIKeyAuth(
+            user_id="u", api_key="hashed", user_role=role
+        )
+
+    def test_get_spend_report_email_settings(self, mock_proxy_config, mock_auth):
+        mock_proxy_config["config"]["litellm_settings"]["spend_report_email_settings"] = {
+            "enabled": True,
+            "frequency": "daily",
+            "daily_send_time": "09:00",
+            "recipient_emails": ["reports@example.com"],
+            "group_by": ["team", "team_key"],
+        }
+
+        resp = client.get("/get/spend_report_email_settings")
+
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["values"]["enabled"] is True
+        assert data["values"]["frequency"] == "daily"
+        assert data["values"]["daily_send_time"] == "09:00"
+        assert data["values"]["recipient_emails"] == ["reports@example.com"]
+        assert data["values"]["group_by"] == ["team", "team_key"]
+        assert "properties" in data["field_schema"]
+
+    def test_update_spend_report_email_settings_requires_admin(self, monkeypatch):
+        monkeypatch.setattr("litellm.proxy.proxy_server.store_model_in_db", True)
+        self._override_auth(LitellmUserRoles.INTERNAL_USER)
+        try:
+            resp = client.patch(
+                "/update/spend_report_email_settings",
+                json={"enabled": True, "recipient_emails": ["test@example.com"]},
+            )
+        finally:
+            app.dependency_overrides.clear()
+        assert resp.status_code == 403
+
+    def test_update_spend_report_email_settings_persists(self, mock_proxy_config, monkeypatch):
+        import litellm
+
+        monkeypatch.setattr("litellm.proxy.proxy_server.store_model_in_db", True)
+        monkeypatch.setattr(litellm, "spend_report_email_settings", None)
+        self._override_auth(LitellmUserRoles.PROXY_ADMIN)
+        payload = {
+            "enabled": True,
+            "frequency": "both",
+            "daily_send_time": "08:00",
+            "monthly_send_time": "09:30",
+            "recipient_emails": ["admin@example.com"],
+            "group_by": ["team", "team_key_model"],
+        }
+        try:
+            resp = client.patch("/update/spend_report_email_settings", json=payload)
+        finally:
+            app.dependency_overrides.clear()
+
+        assert resp.status_code == 200, resp.text
+        assert mock_proxy_config["save_call_count"]() == 1
+        assert litellm.spend_report_email_settings == payload
+        assert (
+            mock_proxy_config["config"]["litellm_settings"]["spend_report_email_settings"]
+            == payload
+        )
+
+
 class TestWebSearchInterceptionSettingsEndpoints:
     @staticmethod
     def _override_auth(role: LitellmUserRoles):

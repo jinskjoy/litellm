@@ -56,6 +56,10 @@ from litellm.proxy.spend_tracking.spend_capture_rate import (
     ProviderBillingRequestFailed,
     capture_rate_report,
 )
+from litellm.proxy.spend_tracking.spend_report_email import (
+    SpendReportEmailSendRequest,
+    SpendReportSendResult,
+)
 
 # NOTE: Avoid module-level import from common_utils: proxy_server imports this
 # module while common_utils may pull proxy_server during init, which can leave
@@ -5030,3 +5034,28 @@ async def _assert_user_owns_cold_storage_payload(
     owner_user, owner_team_id = _cold_storage_payload_owner(payload)
     if not await _user_can_view_spend_log_owner(prisma_client, user_api_key_dict, owner_user, owner_team_id):
         raise _spend_log_forbidden(request_id)
+
+
+@router.post(
+    "/spend/report/email/send",
+    tags=["spend tracking"],
+    dependencies=[Depends(user_api_key_auth)],
+    response_model=SpendReportSendResult,
+)
+async def trigger_spend_report_email(
+    request: SpendReportEmailSendRequest,
+    user_api_key_dict: UserAPIKeyAuth = Depends(user_api_key_auth),
+) -> SpendReportSendResult:
+    """
+    Trigger sending a spend report email immediately.
+    """
+    from litellm.proxy.spend_tracking.spend_report_email import send_spend_report_email
+
+    return await send_spend_report_email(
+        frequency=request.frequency,
+        recipient_emails=request.recipient_emails,
+        group_by=request.group_by,
+        start_date=request.start_date,
+        end_date=request.end_date,
+    )
+
